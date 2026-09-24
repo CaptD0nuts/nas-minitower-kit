@@ -1,0 +1,12 @@
+[Unit]
+Description=Minitower OLED Service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/minitower/sysinfo.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
