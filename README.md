@@ -7,7 +7,7 @@ The vendor's official installer (`geeekpi/absminitowerkit`, `install_bookworm.sh
 ## What's here
 
 - `sysinfo.py` + `demo_opts.py` — drives the 0.96" I2C OLED (address `0x3C`). Shows IP address, CPU temperature, and the actual NAS storage drive's usage (not the SD card).
-- `fancontrol.py` — PWM fan control on `GPIO14` (physical pin 8), confirmed by direct hardware test. Off below 45°C, linear ramp 30-100% duty between 45-65°C, full above 65°C.
+- `fancontrol.py` — PWM fan control on `GPIO14` (physical pin 8), confirmed by direct hardware test. Off below 45°C, linear ramp 30-100% duty between 45-65°C, full above 65°C. Logs every reading (temp, duty %, and the Pi's own `vcgencmd get_throttled` state) to `/var/log/minitower_fan.csv`, daily rotation, 14 days kept.
 - `systemd/minitower_oled.service`, `systemd/minitower_fan.service` — systemd units for both.
 
 ## Deploy (on the Pi)
@@ -25,6 +25,16 @@ sudo systemctl enable --now minitower_oled.service minitower_fan.service
 ```
 
 Edit `STORAGE_PATH` in `sysinfo.py` if the NAS drive's UUID-based mount path ever changes.
+
+## Checking cooling performance
+
+```sh
+tail -f /var/log/minitower_fan.csv
+```
+
+Each line is `timestamp,temp_c,duty_pct,throttled_raw,throttled_flags`. `throttled_flags` will read `none` normally; if it ever shows `undervoltage`, `freq_capped`, `throttled`, or `soft_temp_limit`, the Pi's own firmware has detected a real problem at that moment (not just our own temperature guess) — worth investigating airflow/dust/thermal paste if that starts showing up during normal load.
+
+To eyeball whether the fan ramps sensibly with load, watch the log while doing something CPU-heavy (e.g. a Plex transcode) and confirm `duty_pct` climbs as `temp_c` rises, and drops back down afterward.
 
 ## Notes
 
