@@ -1,2 +1,3 @@
-# Shell scripts must keep LF endings or bash chokes on  (matters for Windows checkouts)
+# Shell scripts must keep LF endings, or bash fails on the stray carriage
+# returns (matters for Windows checkouts with core.autocrlf).
 *.sh text eol=lf
