@@ -47,7 +47,11 @@ log.setLevel(logging.INFO)
 _handler = logging.handlers.TimedRotatingFileHandler(
     LOG_PATH, when="midnight", backupCount=LOG_RETAIN_DAYS
 )
-_handler.setFormatter(logging.Formatter("%(asctime)s,%(message)s"))
+# Explicit datefmt: the default asctime ends in ",<ms>", which would split the
+# timestamp into two CSV fields.
+_handler.setFormatter(
+    logging.Formatter("%(asctime)s,%(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+)
 log.addHandler(_handler)
 
 

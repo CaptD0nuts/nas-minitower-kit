@@ -32,14 +32,14 @@ Edit `STORAGE_PATH` in `sysinfo.py` if the NAS drive's UUID-based mount path eve
 tail -f /var/log/minitower_fan.csv
 ```
 
-Each line is `timestamp,temp_c,duty_pct,throttled_raw,throttled_flags` — but note the timestamp comes from Python logging's default `asctime`, which ends in `,<milliseconds>` (e.g. `2026-09-24 00:00:01,201`), so a CSV parser sees the milliseconds as an extra second column and everything after it shifts right by one (temp is really field 3, duty field 4). `throttled_flags` will read `none` normally; if it ever shows `undervoltage`, `freq_capped`, `throttled`, or `soft_temp_limit`, the Pi's own firmware has detected a real problem at that moment (not just our own temperature guess) — worth investigating airflow/dust/thermal paste if that starts showing up during normal load.
+Each line is `timestamp,temp_c,duty_pct,throttled_raw,throttled_flags`. (Logs written before 2026-09-24 used Python's default timestamp, which ends in `,<milliseconds>` and so shifts every later field right by one — keep that in mind if parsing old rotated files.) `throttled_flags` will read `none` normally; if it ever shows `undervoltage`, `freq_capped`, `throttled`, or `soft_temp_limit`, the Pi's own firmware has detected a real problem at that moment (not just our own temperature guess) — worth investigating airflow/dust/thermal paste if that starts showing up during normal load.
 
 To eyeball whether the fan ramps sensibly with load, watch the log while doing something CPU-heavy (e.g. a Plex transcode) and confirm `duty_pct` climbs as `temp_c` rises, and drops back down afterward.
 
 Quick day summary (peak temp, how often the fan actually ran):
 
 ```sh
-awk -F, '{t=$3+0; if(t>m){m=t;l=$1}; if($4+0>0)n++} END{print "max temp:",m,"at",l; print "fan on:",n+0,"of",NR}' /var/log/minitower_fan.csv
+awk -F, '{t=$2+0; if(t>m){m=t;l=$1}; if($3+0>0)n++} END{print "max temp:",m,"at",l; print "fan on:",n+0,"of",NR}' /var/log/minitower_fan.csv
 ```
 
 ### Thermal limits (Pi 4, stock firmware)
