@@ -32,9 +32,47 @@ Edit `STORAGE_PATH` in `sysinfo.py` if the NAS drive's UUID-based mount path eve
 tail -f /var/log/minitower_fan.csv
 ```
 
-Each line is `timestamp,temp_c,duty_pct,throttled_raw,throttled_flags`. `throttled_flags` will read `none` normally; if it ever shows `undervoltage`, `freq_capped`, `throttled`, or `soft_temp_limit`, the Pi's own firmware has detected a real problem at that moment (not just our own temperature guess) — worth investigating airflow/dust/thermal paste if that starts showing up during normal load.
+Each line is `timestamp,temp_c,duty_pct,throttled_raw,throttled_flags` — but note the timestamp comes from Python logging's default `asctime`, which ends in `,<milliseconds>` (e.g. `2026-09-24 00:00:01,201`), so a CSV parser sees the milliseconds as an extra second column and everything after it shifts right by one (temp is really field 3, duty field 4). `throttled_flags` will read `none` normally; if it ever shows `undervoltage`, `freq_capped`, `throttled`, or `soft_temp_limit`, the Pi's own firmware has detected a real problem at that moment (not just our own temperature guess) — worth investigating airflow/dust/thermal paste if that starts showing up during normal load.
 
 To eyeball whether the fan ramps sensibly with load, watch the log while doing something CPU-heavy (e.g. a Plex transcode) and confirm `duty_pct` climbs as `temp_c` rises, and drops back down afterward.
+
+Quick day summary (peak temp, how often the fan actually ran):
+
+```sh
+awk -F, '{t=$3+0; if(t>m){m=t;l=$1}; if($4+0>0)n++} END{print "max temp:",m,"at",l; print "fan on:",n+0,"of",NR}' /var/log/minitower_fan.csv
+```
+
+### Thermal limits (Pi 4, stock firmware)
+
+`vcgencmd get_config temp_limit` returns `0` on this box, i.e. firmware defaults:
+
+- **80°C** — soft throttling starts; the ARM clock is stepped down from its 1.8 GHz max (shows as `soft_temp_limit`).
+- **85°C** — hard limit; CPU and GPU clocks forced down until it cools.
+
+The fan curve (full speed at 65°C) sits well below both. Baseline from the first full logged day (2026-09-24): idle ~41-43°C, peak 48.2°C, fan ran in only 40 of ~14,100 readings, `throttled=0x0` all day.
+
+## Remote health checks
+
+For password-less checks from another machine, use a dedicated key and an SSH config alias (the private key stays on that machine, never in this repo):
+
+```sh
+ssh-keygen -t ed25519 -N "" -C "laptop-to-nas" -f ~/.ssh/id_ed25519_nas
+cat ~/.ssh/id_ed25519_nas.pub | ssh <user>@<nas-ip> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+```
+Host nas
+    HostName <nas-ip>
+    User <user>
+    IdentityFile ~/.ssh/id_ed25519_nas
+    IdentitiesOnly yes
+```
+
+OMV's stock SSH config already allows public-key auth, so nothing needs changing on the NAS side. Then e.g.:
+
+```sh
+ssh nas 'uptime; vcgencmd measure_temp; vcgencmd get_throttled; df -h /srv/dev-disk-by-uuid-*; systemctl is-active minitower_oled minitower_fan plexmediaserver smbd'
+```
 
 ## Notes
 
