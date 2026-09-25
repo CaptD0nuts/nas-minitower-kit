@@ -74,6 +74,16 @@ OMV's stock SSH config already allows public-key auth, so nothing needs changing
 ssh nas 'uptime; vcgencmd measure_temp; vcgencmd get_throttled; df -h /srv/dev-disk-by-uuid-*; systemctl is-active minitower_oled minitower_fan plexmediaserver smbd'
 ```
 
+### Daily fan-log report
+
+`tools/nas-fanlog-check.sh` runs on the *other* machine (not the Pi): it SSHes in via the `nas` alias, summarizes one full day of the fan log (min/avg/max temp, fan-on %, max duty, throttle events) plus a live service/disk snapshot, and writes it to `~/Projects/nas-reports/fanlog-<day>.txt`. It handles a day that has already rotated past midnight, and skips old-format rows.
+
+```sh
+bash tools/nas-fanlog-check.sh 2026-09-25   # default: today
+```
+
+On Windows it can run unattended from Task Scheduler via Git Bash (`bash.exe -l -c "<path>/nas-fanlog-check.sh <day>"`).
+
 ## Notes
 
 - Installed via `pip`, not `apt`, deliberately — keeps this isolated from OMV's own apt/Python-managed packages.
