@@ -14,7 +14,7 @@ The vendor's official installer (`geeekpi/absminitowerkit`, `install_bookworm.sh
 
 ```sh
 sudo raspi-config nonint do_i2c 0   # enable I2C
-sudo -H pip3 install luma.oled psutil RPi.GPIO
+sudo apt install python3-luma.oled python3-psutil python3-rpi-lgpio python3-pil i2c-tools
 
 sudo mkdir -p /usr/local/minitower
 sudo cp demo_opts.py sysinfo.py fancontrol.py /usr/local/minitower/
@@ -86,7 +86,16 @@ On Windows it can run unattended from Task Scheduler via Git Bash (`bash.exe -l 
 
 ## Notes
 
-- Installed via `pip`, not `apt`, deliberately — keeps this isolated from OMV's own apt/Python-managed packages.
+- Python dependencies come from Debian's own packages (`python3-luma.oled`, `python3-psutil`, `python3-rpi-lgpio`, which provides the `RPi.GPIO` API). The original Debian 11 / OMV 6 install used `pip` to stay clear of OMV's packages; on Debian 13 / OMV 8 the apt packages are current and pip into the system Python is blocked by default.
 - `GPIO14` doubles as the Pi's default serial-console TX pin. Using it for the fan takes over that pin while the service runs — harmless on a headless NAS with no serial cable in use, but stop `minitower_fan.service` first if serial console access is ever needed.
 - If a different unit/revision needs a different fan pin, change `FAN_PIN` in `fancontrol.py` and `systemctl restart minitower_fan.service` — nothing else needs to change.
-- This box's `security.debian.org` bullseye-security repo has been intermittently 404ing on specific package files even after `apt update` (hit this installing `git` and `python3-setuptools`). If that recurs, either temporarily disable `/etc/apt/sources.list.d/openmediavault-os-security.list` for the affected install, or bootstrap pip via `https://bootstrap.pypa.io/pip/3.9/get-pip.py` instead of apt.
+
+## Rebuild notes (Debian 13 / OMV 8)
+
+The NAS was rebuilt on 2026-09-29 as a fresh Raspberry Pi OS Lite (Trixie) + OpenMediaVault 8 install. Things that were needed beyond the deploy steps above:
+
+- **SSH access:** OMV restricts SSH to the `_ssh` group. Add the user to `_ssh` (OMV Users page) before relying on key login.
+- **Home directory permissions:** if the Ono-Sendai `deck-feed` collector runs as `plex` from a user's home directory, that home directory needs mode `755`. OMV can leave it `705` with group `users`, and adding `plex` to `users` then blocks access.
+- **Network interface name:** Trixie may name the onboard NIC `end0` while OMV's netplan config refers to `eth0`, which makes `systemd-networkd-wait-online` time out for 2 minutes at every boot. Pin the name with a `.link` file in `/etc/systemd/network/` that matches the NIC's MAC address and sets `Name=eth0`.
+- **Plex:** install from `repo.plex.tv`, stop it, restore the old `/var/lib/plexmediaserver` directory, `chown -R plex:plex`, and start it. The server keeps its identity, libraries and shares.
+- **NFS share:** a Plex library path may point at the `/export/<share>` bind mount that only exists while the NFS share is configured. Check library paths before removing an NFS share.
