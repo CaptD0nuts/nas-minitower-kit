@@ -25,7 +25,8 @@ import RPi.GPIO as GPIO
 FAN_PIN = 8  # BOARD numbering = physical pin 8 = GPIO14
 PWM_FREQ = 50
 
-OFF_TEMP = 45.0
+OFF_TEMP = 45.0   # fan starts at this temp
+STOP_TEMP = 42.0  # once running, fan only stops below this (hysteresis: no on/off chatter)
 HIGH_TEMP = 65.0
 LOW_DUTY = 30.0
 HIGH_DUTY = 100.0
@@ -81,16 +82,29 @@ fan.start(0)
 # CSV header, written once per service start so the log stays self-describing.
 log.info("temp_c,duty_pct,throttled_raw,throttled_flags")
 
+fan_running = False
+
 try:
     while True:
-        temp = get_cpu_temp()
-        if temp < OFF_TEMP:
-            duty = 0.0
-        elif temp >= HIGH_TEMP:
+        try:
+            temp = get_cpu_temp()
+        except (OSError, ValueError) as e:
+            # Fail safe: if the temperature can't be read, run the fan flat out rather
+            # than leave it off with no idea how hot the CPU is.
+            fan.ChangeDutyCycle(HIGH_DUTY)
+            fan_running = True
+            log.info("nan,%.0f,none,sensor_error:%s", HIGH_DUTY, type(e).__name__)
+            time.sleep(5)
+            continue
+
+        if temp >= HIGH_TEMP:
             duty = HIGH_DUTY
-        else:
+        elif temp >= OFF_TEMP or (fan_running and temp >= STOP_TEMP):
             span = HIGH_TEMP - OFF_TEMP
-            duty = LOW_DUTY + (HIGH_DUTY - LOW_DUTY) * (temp - OFF_TEMP) / span
+            duty = LOW_DUTY + (HIGH_DUTY - LOW_DUTY) * max(temp - OFF_TEMP, 0.0) / span
+        else:
+            duty = 0.0
+        fan_running = duty > 0
         fan.ChangeDutyCycle(duty)
 
         raw, active = get_throttled_flags()

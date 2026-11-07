@@ -5,6 +5,7 @@
 # Shows IP address, CPU temperature, and NAS storage drive usage on the 0.96" I2C OLED (0x3C).
 # Requires demo_opts.py alongside this file, and `luma.oled` + `psutil` (pip installed).
 
+import os
 import subprocess as sp
 import time
 from demo_opts import get_device
@@ -40,6 +41,10 @@ def cpu_temp():
 
 
 def disk_usage():
+    # An unmounted drive leaves an empty mount folder on the SD card, and disk_usage()
+    # on that folder would report the SD card's numbers as if they were the NAS drive.
+    if not os.path.ismount(STORAGE_PATH):
+        return "NAS: NOT MOUNTED"
     usage = psutil.disk_usage(STORAGE_PATH)
     return "NAS: %s/%s %.0f%%" % (bytes2human(usage.used), bytes2human(usage.total), usage.percent)
 
@@ -56,6 +61,18 @@ def stats(device):
 
 device = get_device()
 
+# Blank the panel overnight so a static screen doesn't burn in the OLED.
+NIGHT_START, NIGHT_END = 0, 6  # local hours, 00:00-05:59
+hidden = False
+
 while True:
-    stats(device)
+    night = NIGHT_START <= time.localtime().tm_hour < NIGHT_END
+    if night and not hidden:
+        device.hide()
+        hidden = True
+    elif not night:
+        if hidden:
+            device.show()
+            hidden = False
+        stats(device)
     time.sleep(5)
